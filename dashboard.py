@@ -1,73 +1,58 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px 
+import ast
 
-st.set_page_config(page_title="Dashboard de Secas 2015", page_icon="icon.jpg", layout="wide")
+st.set_page_config(page_title="Cinescópio", page_icon="icon.jpg", layout="wide")
 
-df = pd.read_csv('Secas.csv', sep=',', decimal='.')
+df = pd.read_csv('movies.csv', sep=',', decimal='.')
 
-estado = st.sidebar.selectbox('Selecione o estado', df['NM_ESTADO'].unique())
+year = st.sidebar.selectbox('Selecione o ano', df.release_year.unique())
 
-
-df.filtered = df[df['NM_ESTADO'] == estado] 
-
-st.header('Análise de Secas - 2015')
+df.year = df[df['release_year'] == year] 
 
 
-total_municipios = df.filtered.shape[0]
-afetados = df.filtered[df.filtered['SECAS2015'] == 1].shape[0]
-percentual = (afetados / total_municipios * 100) if total_municipios > 0 else 0
-area_total = df.filtered['SHAPE_Area'].sum()
+
+
+st.header(f"Resumo dos filmes lançados no ano de {year}")
 
 col1, col2, col3, col4 = st.columns(4)
 
-col1.metric('Municípios', total_municipios)
-col2.metric('Com seca', afetados)
-col3.metric('Afetados %', f"{percentual:.1f}%")
-col4.metric('Área total', f"{area_total:.2f}")
+mean = df.year['imdb_score'].dropna().mean()
+
+if pd.isna(mean):
+    mean = 0
+
+col1.metric(label="Filmes lançados", value=df.year.shape[0])
+col2.metric(label="Média do IMDb", value=f"{mean:.2f}")
+
+def gettop(df, column):
+    df = df.copy()
+    df[column] = df[column].dropna().apply(
+        lambda x: ast.literal_eval(x) if isinstance(x, str) else x
+    )
+    return (
+        df.explode(column)[column]
+        .value_counts()
+        .idxmax()
+    )
+
+col3.metric(label="Gênero mais comum", value=(gettop(df.year, 'genres')))
+col4.metric(label="País mais comum", value=(gettop(df.year, 'production_countries')))    
 
 
 
 
 
-col_graf1, col_graf2 = st.columns(2)
+attributes = ['title', 'release_year', 'imdb_score', 'imdb_votes', 'production_countries', 'genres']
 
-
-fig1 = px.histogram(
-    df.filtered,
-    x='SHAPE_Area',
-    color='SECAS2015',
-    title='Distribuição de Área (Seca vs Não seca)',
-    labels={'SHAPE_Area': 'Área'}
-)
-col_graf1.plotly_chart(fig1, use_container_width=True)
-
-
-
-
-fig2 = px.scatter(
-    df.filtered,
-    x='SHAPE_Area',
-    y='SHAPE_Length',
-    color='SECAS2015',
-    title='Área vs Perímetro',
-    labels={'SHAPE_Area': 'Área', 'SHAPE_Length': 'Perímetro' } 
-)
-col_graf2.plotly_chart(fig2, use_container_width=True)
-
-
-
-
-st.subheader('Top 10 maiores municípios com seca')
-
-top10 = (
-    df.filtered[df.filtered['SECAS2015'] == 1]
-    .sort_values('SHAPE_Area', ascending=False)
-    .head(10)
-)
-
-st.dataframe(top10)
-
-
-st.subheader('Dados filtrados')
-st.dataframe(df.filtered)
+st.dataframe(
+    df.year[attributes].rename(columns={
+    'title': 'Título',
+    'release_year': 'Ano',
+    'imdb_score': 'Nota IMDb',
+    'imdb_votes': 'Votos',
+    'production_countries': 'Países',
+    'genres': 'Gêneros'
+             }), hide_index=True
+    )
